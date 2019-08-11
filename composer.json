@@ -1,0 +1,20 @@
+{
+  "name": "janfish/swoole-db-orm",
+  "description": "Swoole DB ORM",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Robert",
+      "email": "robert@janfish.cn"
+    }
+  ],
+  "require": {
+    "php": ">=7.1.0",
+    "ext-swoole": "4.3.*"
+  },
+  "autoload": {
+    "psr-4": {
+      "Janfish\\Swoole\\": "src/"
+    }
+  }
+}
