@@ -9,6 +9,7 @@
     }
   ],
   "require": {
+    "ext-pdo": "*",
     "php": ">=7.1.0",
     "ext-swoole": "4.3.*"
   },

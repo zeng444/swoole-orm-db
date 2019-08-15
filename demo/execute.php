@@ -1,21 +1,9 @@
 <?php
 
-use Janfish\Swoole\Pool\Db\Mysql;
+use Janfish\Swoole\Coroutine\Db\Adapter\Pdo\Mysql;
 
 include_once '../vendor/autoload.php';
-$descriptor = [
-    "host" => "mysql",
-    "username" => "root",
-    "password" => "root",
-    "dbname" => "car_insurance_genius_v2_prod",
-    "port" => 3306,
-    "charset" => 'utf8mb4',
-    'options' => [
-        \PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES utf8mb4',
-    ],
-];
-//$sql = "SELECT * FROM `configuration`  WHERE id=? or id=? LIMIT ?,?";
-//$bind = [1, 2, 0, 2];
+$descriptor = require_once 'configs/db.php';
 
 $sql = "INSERT INTO `configuration` (`companyId`,`key`)values(:companyId,:key2)";
 $bind = [

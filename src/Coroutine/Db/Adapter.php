@@ -74,13 +74,12 @@ class Adapter implements AdapterInterface
         return true;
     }
 
-
     /**
-     * Appends a LIMIT clause to sqlQuery argument
+     * Author:Robert
      *
-     * @param    string sqlQuery
-     * @param    int number
-     * @return    string
+     * @param $sqlQuery
+     * @param int $number
+     * @return string
      */
     public function limit($sqlQuery, $number)
     {

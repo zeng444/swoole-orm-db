@@ -23,6 +23,20 @@ abstract class Pdo extends Adapter
 
     protected $_affectedRows;
 
+
+    /**
+     * Author:Robert
+     *
+     * @param $str
+     * @param null $escapeChar
+     * @return string
+     */
+    abstract function escape($str, $escapeChar = null): string;
+
+    /**
+     * Pdo constructor.
+     * @param array $descriptor
+     */
     public function __construct(array $descriptor)
     {
         $this->connect($descriptor);
@@ -74,11 +88,12 @@ abstract class Pdo extends Adapter
      * Author:Robert
      *
      * @param string $statement
-     * @param array $placeholders
+     * @param array|null $placeholders
+     * @param array|null $bindTypes
      * @return array
      * @throws \Exception
      */
-    protected function parseBind(string $statement, array $placeholders, array $bindTypes = null): array
+    protected function parseBind(string $statement, array $placeholders = null, array $bindTypes = null): array
     {
         $pattern = '/\:(\w+)/';
         if (!preg_match_all($pattern, $statement, $matched)) {
@@ -130,6 +145,7 @@ abstract class Pdo extends Adapter
      */
     public function execute($sqlStatement, $bindParams = null, $bindTypes = null): bool
     {
+
         list($sqlStatement, $bindParams) = $this->parseBind($sqlStatement, $bindParams, $bindTypes);
         $affectedRows = 0;
         $this->_statement = $this->_pdo->prepare($sqlStatement);
@@ -151,6 +167,16 @@ abstract class Pdo extends Adapter
     public function affectedRows(): int
     {
         return $this->_affectedRows;
+    }
+
+    /**
+     * Author:Robert
+     *
+     * @return bool
+     */
+    public function close(): bool
+    {
+        return true;
     }
 
     /**
@@ -198,6 +224,7 @@ abstract class Pdo extends Adapter
         return $this->_statement->fetch();
     }
 
+
     /**
      * Author:Robert
      *
@@ -207,10 +234,11 @@ abstract class Pdo extends Adapter
     public function escapeIdentifier($identifier): string
     {
         if (is_array($identifier)) {
-            return $this->_pdo->escape($identifier[0]).".".$this->_pdo->escape($identifier[1]);
+            return $this->escape($identifier[0]).".".$this->escape($identifier[1]);
         }
-        return $this->_pdo->escape($identifier);
+        return $this->escape($identifier);
     }
+
 
     /**
      * Author:Robert
@@ -308,6 +336,21 @@ abstract class Pdo extends Adapter
     /**
      * Author:Robert
      *
+     * @param array $array
+     * @param array $append
+     * @return array
+     */
+    private function mergeAppend(array $array, array $append): array
+    {
+        foreach ($append as $val) {
+            $array[] = $val;
+        }
+        return $array;
+    }
+
+    /**
+     * Author:Robert
+     *
      * @param $table
      * @param $fields
      * @param $values
@@ -318,13 +361,9 @@ abstract class Pdo extends Adapter
      */
     public function update($table, $fields, $values, $whereCondition = null, $dataTypes = null): bool
     {
-
-
         $placeholders = [];
         $updateValues = [];
-
         $bindDataTypes = [];
-
         /**
          * Objects are casted using __toString, null values are converted to string 'null', everything else is passed as '?'
          */
@@ -333,36 +372,24 @@ abstract class Pdo extends Adapter
                 throw new \Exception("The number of values in the update is not the same as fields");
             }
             $field = $fields[$position];
-
             $escapedField = $this->escapeIdentifier($field);
-            if (is_object($value)) {
-
-                $placeholders[] = $escapedField." = ".$value;
+            if ($value === null) {
+                $placeholders[] = $escapedField." = null";
             } else {
-                if ($value === null) {
-
-                    $placeholders[] = $escapedField." = null";
-                } else {
-                    $updateValues[] = $value;
-                    if (is_array($dataTypes)) {
-                        if (!isset($dataTypes[$position])) {
-                            throw new \Exception("Incomplete number of bind types");
-                        }
-                        $bindType = $dataTypes[$position];
-
-                        $bindDataTypes[] = $bindType;
+                $updateValues[] = $value;
+                if (is_array($dataTypes)) {
+                    if (!isset($dataTypes[$position])) {
+                        throw new \Exception("Incomplete number of bind types");
                     }
-                    $placeholders[] = $escapedField." = ?";
+                    $bindType = $dataTypes[$position];
+                    $bindDataTypes[] = $bindType;
                 }
+                $placeholders[] = $escapedField." = ?";
             }
         }
-
         $escapedTable = $this->escapeIdentifier($table);
-
         $setClause = join(", ", $placeholders);
-
         if ($whereCondition !== null) {
-
             $updateSql = "UPDATE ".$escapedTable." SET ".$setClause." WHERE ";
 
             /**
@@ -383,35 +410,142 @@ abstract class Pdo extends Adapter
                  * If an index 'conditions' is present it contains string where conditions that are appended to the UPDATE sql
                  */
                 if (isset($whereCondition["conditions"])) {
-                    $updateSql = $whereCondition["conditions"];
+                    $updateSql .= $whereCondition["conditions"];
                 }
 
                 /**
                  * Bound parameters are arbitrary values that are passed by separate
                  */
+
                 if (isset($whereCondition["bind"])) {
-                    merge_append($updateValues, $whereCondition["bind"]);
+                    $updateValues = $this->mergeAppend($updateValues, $whereCondition["bind"]);
                 }
 
                 /**
                  * Bind types is how the bound parameters must be casted before be sent to the database system
                  */
                 if (isset($whereCondition["bindTypes"])) {
-                    merge_append($bindDataTypes, $whereCondition["bindTypes"]);
+                    $bindDataTypes = $this->mergeAppend($bindDataTypes, $whereCondition["bindTypes"]);
                 }
             }
         } else {
             $updateSql = "UPDATE ".$escapedTable." SET ".$setClause;
         }
-
         /**
          * Perform the update via PDO::execute
          */
         if (!sizeof($bindDataTypes)) {
             return $this->{"execute"}($updateSql, $updateValues);
         }
-
         return $this->{"execute"}($updateSql, $updateValues, $bindDataTypes);
+    }
+
+
+    /**
+     * Author:Robert
+     *
+     * @param $table
+     * @param $data
+     * @param null $whereCondition
+     * @param null $dataTypes
+     * @return bool
+     * @throws \Exception
+     */
+    public function updateAsDict($table, $data, $whereCondition = null, $dataTypes = null): bool
+    {
+        $values = [];
+        $fields = [];
+        if (!is_array($data) || empty($data)) {
+            return false;
+        }
+        foreach ($data as $field => $value) {
+            $fields[] = $field;
+            $values[] = $value;
+        }
+        return $this->update($table, $fields, $values, $whereCondition, $dataTypes);
+
+    }
+
+    /**
+     * Author:Robert
+     *
+     * @param $table
+     * @param null $whereCondition
+     * @param null $placeholders
+     * @param null $dataTypes
+     * @return bool
+     */
+    public function delete($table, $whereCondition = null, $placeholders = null, $dataTypes = null): bool
+    {
+        $escapedTable = $this->escapeIdentifier($table);
+        if (!empty($whereCondition)) {
+            $sql = "DELETE FROM ".$escapedTable." WHERE ".$whereCondition;
+        } else {
+            $sql = "DELETE FROM ".$escapedTable;
+        }
+        /**
+         * Perform the update via PDO::execute
+         */
+        return $this->{"execute"}($sql, $placeholders, $dataTypes);
+    }
+
+
+    /**
+     * Author:Robert
+     *
+     * @param $sqlQuery
+     * @return string
+     */
+    public function forUpdate($sqlQuery): string
+    {
+        return $sqlQuery." FOR UPDATE";
+    }
+
+    /**
+     * Author:Robert
+     *
+     * @param $sqlQuery
+     * @return string
+     */
+    public function sharedLock($sqlQuery): string
+    {
+        return $sqlQuery." LOCK IN SHARE MODE";
+    }
+
+    /**
+     * Author:Robert
+     *
+     * @param $tableName
+     * @param null $schemaName
+     * @return bool
+     * @throws \Exception
+     */
+    public function tableExists($tableName, $schemaName = null): bool
+    {
+        if ($schemaName) {
+            $sqlStatement = "SELECT IF(COUNT(*) > 0, 1, 0)  AS `count` FROM `INFORMATION_SCHEMA`.`TABLES` WHERE `TABLE_NAME`= '".$tableName."' AND `TABLE_SCHEMA` = '".$schemaName."'";
+        } else {
+            $sqlStatement = "SELECT IF(COUNT(*) > 0, 1, 0) AS `count` FROM `INFORMATION_SCHEMA`.`TABLES` WHERE `TABLE_NAME` = '".$tableName."' AND `TABLE_SCHEMA` = DATABASE()";
+        }
+        return $this->fetchOne($sqlStatement, \Pdo::FETCH_NUM)['count'] > 0;
+    }
+
+    /**
+     * Author:Robert
+     *
+     * @param $viewName
+     * @param null $schemaName
+     * @return bool
+     * @throws \Exception
+     */
+    public function viewExists($viewName, $schemaName = null): bool
+    {
+        if ($schemaName) {
+            $sqlStatement = "SELECT IF(COUNT(*) > 0, 1, 0) AS `count` FROM `INFORMATION_SCHEMA`.`VIEWS` WHERE `TABLE_NAME`= '".$viewName."' AND `TABLE_SCHEMA`='".$schemaName."'";
+        } else {
+            $sqlStatement = "SELECT IF(COUNT(*) > 0, 1, 0) AS `count` FROM `INFORMATION_SCHEMA`.`VIEWS` WHERE `TABLE_NAME`='".$viewName."' AND `TABLE_SCHEMA` = DATABASE()";
+        }
+        return $this->fetchOne($sqlStatement)['count'] > 0;
     }
 
 
