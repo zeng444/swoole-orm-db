@@ -172,6 +172,8 @@ abstract class Pdo extends Adapter
 
     }
 
+
+
     /**
      * Author:Robert
      *
@@ -205,6 +207,7 @@ abstract class Pdo extends Adapter
      */
     public function close(): bool
     {
+        $this->_pdo->close();
         return true;
     }
 
