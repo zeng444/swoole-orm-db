@@ -15,13 +15,47 @@ use Swoole\Coroutine\MySQL as CoroutineMySQL;
 abstract class Pdo extends Adapter
 {
 
+    /**
+     * Author:Robert
+     *
+     * @var array
+     */
     protected $_descriptor = [];
 
+    /**
+     * Author:Robert
+     *
+     * @var
+     */
     protected $_pdo;
 
+    /**
+     * Author:Robert
+     *
+     * @var
+     */
     protected $_statement;
 
-    protected $_affectedRows;
+    /**
+     * Author:Robert
+     *
+     * @var int
+     */
+    protected $_transactionLevel = 0;
+
+    /**
+     * Author:Robert
+     *
+     * @var bool
+     */
+    protected $_transactionsWithSavepoints = false;
+
+    /**
+     * Author:Robert
+     *
+     * @var bool
+     */
+    protected $_isDefer = false;
 
 
     /**
@@ -129,9 +163,13 @@ abstract class Pdo extends Adapter
         list($sqlStatement, $bindParams) = $this->parseBind($sqlStatement, $bindParams, $bindTypes);
         $this->_statement = $this->_pdo->prepare($sqlStatement);
         if ($this->_statement) {
+            if ($this->_isDefer) {
+                $this->_pdo->setDefer();
+            }
             $this->_statement->execute($bindParams);
         }
-        return $this->_statement;
+        return new \Janfish\Swoole\Coroutine\Db\Result\Pdo($this, $this->_statement, $sqlStatement, $bindParams, $bindTypes);
+
     }
 
     /**
@@ -145,28 +183,19 @@ abstract class Pdo extends Adapter
      */
     public function execute($sqlStatement, $bindParams = null, $bindTypes = null): bool
     {
-
         list($sqlStatement, $bindParams) = $this->parseBind($sqlStatement, $bindParams, $bindTypes);
-        $affectedRows = 0;
+
         $this->_statement = $this->_pdo->prepare($sqlStatement);
         if ($this->_statement) {
+            if ($this->_isDefer) {
+                $this->_pdo->setDefer();
+            }
             if (!$this->_statement->execute($bindParams)) {
                 return false;
             }
-            $affectedRows = $this->_pdo->affected_rows;
-        }
-        $this->_affectedRows = $affectedRows;
-        return true;
-    }
 
-    /**
-     * Author:Robert
-     *
-     * @return int
-     */
-    public function affectedRows(): int
-    {
-        return $this->_affectedRows;
+        }
+        return true;
     }
 
     /**
@@ -179,34 +208,254 @@ abstract class Pdo extends Adapter
         return true;
     }
 
+
     /**
      * Author:Robert
      *
-     * @param null $sequenceName
-     * @return int
+     * @param bool $nesting
+     * @return bool
+     * @throws \Exception
      */
-    public function lastInsertId($sequenceName = null): int
+    public function begin(bool $nesting = true): bool
     {
-        return $this->_pdo->insert_id;
+
+        $pdo = $this->_pdo;
+        if (!is_object($pdo)) {
+            return false;
+        }
+        /**
+         * Increase the transaction nesting level
+         */
+        $this->_transactionLevel++;
+
+        /**
+         * Check the transaction nesting level
+         */
+        $transactionLevel = (int)$this->_transactionLevel;
+
+        if ($transactionLevel == 1) {
+            return $pdo->begin();
+        } else {
+            /**
+             * Check if the current database system supports nested transactions
+             */
+            if ($transactionLevel && $nesting && $this->isNestedTransactionsWithSavepoints()) {
+                $savepointName = $this->getNestedTransactionSavepointName();
+                return $this->createSavepoint($savepointName);
+            }
+        }
+
+        return false;
     }
+
+    /**
+     * Author:Robert
+     *
+     * @param bool $nesting
+     * @return bool
+     * @throws \Exception
+     */
+    public function commit(bool $nesting = true): bool
+    {
+
+        $pdo = $this->_pdo;
+        if (!is_object($pdo)) {
+            return false;
+        }
+        /**
+         * Check the transaction nesting level
+         */
+        $transactionLevel = (int)$this->_transactionLevel;
+        if (!$transactionLevel) {
+            throw new \Exception("There is no active transaction");
+        }
+        if ($transactionLevel == 1) {
+
+            /**
+             * Reduce the transaction nesting level
+             */
+            $this->_transactionLevel--;
+
+            return $pdo->commit();
+        } else {
+
+            /**
+             * Check if the current database system supports nested transactions
+             */
+            if ($transactionLevel && $nesting && $this->isNestedTransactionsWithSavepoints()) {
+                $savepointName = $this->getNestedTransactionSavepointName();
+                /**
+                 * Reduce the transaction nesting level
+                 */
+                $this->_transactionLevel--;
+                return $this->releaseSavepoint($savepointName);
+            }
+
+        }
+
+        /**
+         * Reduce the transaction nesting level
+         */
+        if ($transactionLevel > 0) {
+            $this->_transactionLevel--;
+        }
+
+        return false;
+    }
+
+    /**
+     * Author:Robert
+     *
+     * @param bool $nesting
+     * @return bool
+     * @throws \Exception
+     */
+    public function rollback(bool $nesting = true): bool
+    {
+        $pdo = $this->_pdo;
+        if (!is_object($pdo)) {
+            return false;
+        }
+        /**
+         * Check the transaction nesting level
+         */
+        $transactionLevel = (int)$this->_transactionLevel;
+        if (!$transactionLevel) {
+            throw new \Exception("There is no active transaction");
+        }
+        if ($transactionLevel == 1) {
+            /**
+             * Reduce the transaction nesting level
+             */
+            $this->_transactionLevel--;
+            return $pdo->rollback();
+
+        } else {
+            /**
+             * Check if the current database system supports nested transactions
+             */
+            if ($transactionLevel && $transactionLevel && $this->isNestedTransactionsWithSavepoints()) {
+                $savepointName = $this->getNestedTransactionSavepointName();
+                $this->_transactionLevel--;
+                return $this->rollbackSavepoint($savepointName);
+            }
+        }
+
+        /**
+         * Reduce the transaction nesting level
+         */
+        if ($transactionLevel > 0) {
+            $this->_transactionLevel--;
+        }
+
+        return false;
+    }
+
+    /**
+     * Author:Robert
+     *
+     * @return bool
+     */
+    public function isNestedTransactionsWithSavepoints(): bool
+    {
+        return $this->_transactionsWithSavepoints;
+    }
+
+
+    /**
+     * Author:Robert
+     *
+     * @return string
+     */
+    public function getNestedTransactionSavepointName(): string
+    {
+        return "PHALCON_SAVEPOINT_".$this->_transactionLevel;
+    }
+
+
+    /**
+     * Author:Robert
+     *
+     * @param $name
+     * @return string
+     * @throws \Exception
+     */
+    public function releaseSavepoint($name): string
+    {
+        $sql = "RELEASE SAVEPOINT ".$name;
+        return $this->execute($sql);
+    }
+
+    /**
+     * Author:Robert
+     *
+     * @param $name
+     * @return bool
+     * @throws \Exception
+     */
+    public function rollbackSavepoint($name): bool
+    {
+        $sql = "ROLLBACK TO SAVEPOINT ".$name;
+        return $this->execute($sql);
+    }
+
+    /**
+     * Author:Robert
+     *
+     * @param $name
+     * @return bool
+     * @throws \Exception
+     */
+    public function createSavepoint($name): bool
+    {
+        $sql = "SAVEPOINT ".$name;
+        return $this->execute($sql);
+    }
+
+
+    //    /**
+    //    //     * Author:Robert
+    //    //     *
+    //    //     * @param string $sqlQuery
+    //    //     * @param int $fetchMode
+    //    //     * @param null $placeholders
+    //    //     * @return array
+    //    //     * @throws \Exception
+    //    //     */
+    //    //    public function fetchAllOrigin(string $sqlQuery, $fetchMode = 2, $placeholders = null)
+    //    //    {
+    //    //        list($sqlStatement, $bindParams) = $this->parseBind($sqlQuery, $placeholders);
+    //    //        $this->_statement = $this->_pdo->prepare($sqlStatement);
+    //    //        if ($this->_statement) {
+    //    //            $this->_statement->execute($bindParams);
+    //    //        }
+    //    //        return $this->_statement->fetchAll();
+    //    //    }
+
 
     /**
      * Author:Robert
      *
      * @param string $sqlQuery
      * @param int $fetchMode
-     * @param null $placeholders
+     * @param null $bindParams
+     * @param null $bindTypes
      * @return array
      * @throws \Exception
      */
-    public function fetchAll(string $sqlQuery, $fetchMode = 2, $placeholders = null)
+    public function fetchAll(string $sqlQuery, $fetchMode = 2, $bindParams = null, $bindTypes = null): array
     {
-        list($sqlStatement, $bindParams) = $this->parseBind($sqlQuery, $placeholders);
-        $this->_statement = $this->_pdo->prepare($sqlStatement);
-        if ($this->_statement) {
-            $this->_statement->execute($bindParams);
+        $results = [];
+        $result = $this->query($sqlQuery, $bindParams, $bindTypes);
+        if (is_object($result)) {
+            if ($fetchMode !== null) {
+                $result->setFetchMode($fetchMode);
+            }
+            while ($row = $result->fetch()) {
+                $results[] = $row;
+            }
         }
-        return $this->_statement->fetchAll();
+        return $results;
     }
 
     /**
@@ -239,6 +488,60 @@ abstract class Pdo extends Adapter
         return $this->escape($identifier);
     }
 
+
+    /**
+     * Author:Robert
+     *
+     */
+    public function setDefer()
+    {
+        $this->_isDefer = true;
+    }
+
+    /**
+     * Author:Robert
+     *
+     * @param null $sequenceName
+     * @return int
+     */
+    public function lastInsertId($sequenceName = null): int
+    {
+        $pdo = $this->_pdo;
+        if (!is_object($pdo)) {
+            return 0;
+        }
+        return $this->_pdo->insert_id;
+    }
+
+
+    /**
+     * Author:Robert
+     *
+     * @return int
+     */
+    public function affectedRows(): int
+    {
+        if (!is_object($this->_pdo)) {
+            return 0;
+        }
+        return $this->_pdo->affected_rows;
+    }
+
+
+    /**
+     * Author:Robert
+     *
+     */
+    public function recv()
+    {
+        $this->_isDefer = false;
+        $result = $this->_pdo->recv();
+        if (!$result) {
+            return false;
+        }
+        return true;
+
+    }
 
     /**
      * Author:Robert
@@ -515,38 +818,11 @@ abstract class Pdo extends Adapter
     /**
      * Author:Robert
      *
-     * @param $tableName
-     * @param null $schemaName
-     * @return bool
-     * @throws \Exception
+     * @return array
      */
-    public function tableExists($tableName, $schemaName = null): bool
+    public function getDescriptor(): array
     {
-        if ($schemaName) {
-            $sqlStatement = "SELECT IF(COUNT(*) > 0, 1, 0)  AS `count` FROM `INFORMATION_SCHEMA`.`TABLES` WHERE `TABLE_NAME`= '".$tableName."' AND `TABLE_SCHEMA` = '".$schemaName."'";
-        } else {
-            $sqlStatement = "SELECT IF(COUNT(*) > 0, 1, 0) AS `count` FROM `INFORMATION_SCHEMA`.`TABLES` WHERE `TABLE_NAME` = '".$tableName."' AND `TABLE_SCHEMA` = DATABASE()";
-        }
-        return $this->fetchOne($sqlStatement, \Pdo::FETCH_NUM)['count'] > 0;
+        return $this->_descriptor;
     }
-
-    /**
-     * Author:Robert
-     *
-     * @param $viewName
-     * @param null $schemaName
-     * @return bool
-     * @throws \Exception
-     */
-    public function viewExists($viewName, $schemaName = null): bool
-    {
-        if ($schemaName) {
-            $sqlStatement = "SELECT IF(COUNT(*) > 0, 1, 0) AS `count` FROM `INFORMATION_SCHEMA`.`VIEWS` WHERE `TABLE_NAME`= '".$viewName."' AND `TABLE_SCHEMA`='".$schemaName."'";
-        } else {
-            $sqlStatement = "SELECT IF(COUNT(*) > 0, 1, 0) AS `count` FROM `INFORMATION_SCHEMA`.`VIEWS` WHERE `TABLE_NAME`='".$viewName."' AND `TABLE_SCHEMA` = DATABASE()";
-        }
-        return $this->fetchOne($sqlStatement)['count'] > 0;
-    }
-
 
 }

@@ -5,23 +5,29 @@ use Janfish\Swoole\Coroutine\Db\Adapter\Pdo\Mysql;
 include_once '../vendor/autoload.php';
 $descriptor = require_once 'configs/db.php';
 
-$sql = "SELECT * FROM `configuration`  WHERE id>:id or id<:id2 LIMIT 0,10";
+$sql = "INSERT INTO `configuration` (`companyId`,`key`)values(:companyId,:key2)";
 $bind = [
-    ['1', '2'],
-    ['companyId', 'key'],
+    'companyId' => 1,
+    'key2' => microtime(),
 ];
 
 
 go(function () use ($descriptor, $sql, $bind) {
     $mysql = new Mysql($descriptor);
     $mysql->setDefer();
-    $result = $mysql->insert('configuration', $bind[0], $bind[1]);
-    echo $result.PHP_EOL;
+    $result = $mysql->execute($sql, $bind);
     $mysql->recv();
-    echo $result.PHP_EOL;
+    if (!$result) {
+        echo "error:".$mysql->errno.$mysql->error.PHP_EOL;
+    }
     echo "success:".$mysql->affectedRows().PHP_EOL;
     echo "success:".$mysql->lastInsertId().PHP_EOL;
+
 });
-//
+
 //$mysql = new \Phalcon\Db\Adapter\Pdo\Mysql($descriptor);
-//echo $mysql->insert('configuration',$bind[0],$bind[1]);
+//$result = $mysql->execute($sql,$bind);
+//if(!$result){
+//    echo "error:".PHP_EOL;
+//}
+//echo "success:".$mysql->affectedRows().PHP_EOL;
