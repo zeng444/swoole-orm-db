@@ -68,7 +68,6 @@ class Adapter implements AdapterInterface
     const  CR_SERVER_LOST = 2013;
 
 
-
     /**
      * Author:Robert
      *
@@ -134,7 +133,7 @@ class Adapter implements AdapterInterface
      */
     public function reconnect(): bool
     {
-        if ($this->_reconnection >= $this->max_reconnection - 1) {
+        if ($this->_reconnection >= $this->max_reconnection) {
             throw new \PDOException('Retry connection failed');
         }
         if (!$this->connect($this->_descriptor)) {
