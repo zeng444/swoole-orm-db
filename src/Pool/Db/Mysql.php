@@ -3,10 +3,10 @@
 namespace Janfish\Swoole\Pool\Db;
 
 
-use Janfish\Swoole\Pool\Base;
+use Janfish\Swoole\Pool;
 use Janfish\Swoole\Pool\PoolInterface;
 
-class Mysql extends Base implements PoolInterface
+class Mysql extends Pool implements PoolInterface
 {
 
 

@@ -1,8 +1,8 @@
 <?php
 
-namespace Janfish\Swoole\Pool;
+namespace Janfish\Swoole;
 
-abstract class Base
+abstract class Pool
 {
 
     /**
@@ -25,11 +25,31 @@ abstract class Base
     protected $min;
 
     /**
+     * @var
+     */
+    protected $minSpare;
+
+    /**
+     * @var int|mixed
+     */
+    protected $minSpareMinute = 20;
+
+    /**
+     * @var
+     */
+    protected $maxSpare;
+
+    /**
      * Author:Robert
      *
-     * @var int 
+     * @var int
      */
     protected $createdConnection = 0;
+
+    /**
+     * @var int|mixed
+     */
+    protected $gcLoopMinute = 5;
 
 
     /**
@@ -41,8 +61,27 @@ abstract class Base
         if (isset($options['max'])) {
             $this->max = $options['max'];
         }
+        if (isset($options['max_spare'])) {
+            $this->max = $options['max_spare'];
+        }
+        if (isset($options['minSpareMinute'])) {
+            $this->minSpareMinute = $options['minSpareMinute'];
+        }
+
         if (isset($options['min'])) {
             $this->min = $options['min'];
+        }
+        if (isset($options['min_spare'])) {
+            $this->minSpare = $options['max_spare'];
+        }
+        if (isset($options['max_spare'])) {
+            $this->maxSpare = $options['max_spare'];
+        }
+        if (isset($options['max_spare'])) {
+            $this->maxSpare = $options['max_spare'];
+        }
+        if (isset($options['gc_loop_minute'])) {
+            $this->gcLoopMinute = $options['gc_loop_minute'];
         }
         $this->pool = new \Swoole\Coroutine\Channel($this->min);
 
@@ -92,7 +131,10 @@ abstract class Base
      */
     private function addConnection($connection)
     {
-        $this->pool->push($connection);
+        $this->pool->push([
+            'lastAt' => time(),
+            'connection' => $connection,
+        ]);
         $this->createdConnection++;
     }
 
@@ -108,8 +150,8 @@ abstract class Base
         if ($this->isEmpty() && $this->createdConnection < $this->max) {
             $this->addConnection($this->createConnection());
         }
-        $connection = $this->pool->pop($timeout);
-        return $connection;
+        $handler = $this->pool->pop($timeout);
+        return $handler['connection'];
     }
 
     /**
@@ -125,7 +167,11 @@ abstract class Base
             $this->removeConnection($connection);
             return false;
         }
-        $result = $this->pool->push($connection, $timeout);
+        $handler = [
+            'lastAt' => time(),
+            'connection' => $connection,
+        ];
+        $result = $this->pool->push($handler, $timeout);
         if (!$result) {
             $this->removeConnection($connection);
         }
@@ -172,6 +218,37 @@ abstract class Base
     public function isEmpty(): bool
     {
         return $this->pool->isEmpty();
+    }
+
+    /**
+     * Author:Robert
+     *
+     */
+    public function gc()
+    {
+        \Swoole\Timer::tick(120000, function () {
+            $list = [];
+            $lenth = $this->length();
+            if ($lenth > $this->maxSpare) {
+                while (!$this->isEmpty()) {
+                    $handler = $this->pool->pop(0.001);
+                    $lastAt = $handler['lastAt'] ?? 0;
+                    if (time() - $lastAt > 60 * $this->minSpareMinute && $this->createdConnection >= $this->min) {
+                        $this->closeConnection($handler['connection']);
+                    } else {
+                        array_push($list, $handler);
+                    }
+                }
+                foreach ($list as $item) {
+                    $this->pool->push($item);
+                }
+            } elseif ($lenth < $this->minSpare && $this->createdConnection < $this->max) {
+                $quantity = floor(($this->max - $lenth) / 2);
+                for ($i = 0; $i < $quantity; $i++) {
+                    $this->addConnection($this->createConnection());
+                }
+            }
+        });
     }
 
 }
