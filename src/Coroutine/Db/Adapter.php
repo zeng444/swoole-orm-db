@@ -18,6 +18,13 @@ class Adapter implements AdapterInterface
     /**
      * Author:Robert
      *
+     * @var array
+     */
+    protected $_descriptor = [];
+
+    /**
+     * Author:Robert
+     *
      * @var
      */
     protected $_pdo;
@@ -37,6 +44,106 @@ class Adapter implements AdapterInterface
      */
     protected $_isDefer = false;
 
+    /**
+     * @var int
+     */
+    protected $max_reconnection = 2;
+
+    /**
+     * @var int
+     */
+    private $_reconnection = 0;
+
+
+    /**
+     * MySQL server has gone away
+     * https://dev.mysql.com/doc/refman/5.7/en/client-error-reference.html#error_cr_server_gone_error
+     */
+    const  CR_SERVER_GONE_ERROR = 2006;
+
+    /**
+     *  Lost connection to MySQL server during query
+     * https://dev.mysql.com/doc/refman/5.7/en/client-error-reference.html#error_cr_server_lost
+     */
+    const  CR_SERVER_LOST = 2013;
+
+
+
+    /**
+     * Author:Robert
+     *
+     * @param $errorNo
+     * @return bool
+     */
+    public function isConnectionError($errorNo): bool
+    {
+        return in_array($errorNo, [self::CR_SERVER_GONE_ERROR, self::CR_SERVER_LOST]);
+    }
+
+
+    /**
+     * Author:Robert
+     *
+     * @param array|null $descriptor
+     * @return bool
+     */
+    public function connect(array $descriptor = null): bool
+    {
+        if ($descriptor) {
+            $this->_descriptor = $descriptor;
+        }
+
+        if (!isset($descriptor['host'])) {
+            $descriptor['host'] = '127.0.0.1';
+        }
+        if (!isset($descriptor['port'])) {
+            $descriptor['host'] = 3306;
+        }
+        /**
+         * /兼容phalcon的判定
+         */
+        if (isset($descriptor['username'])) {
+            $descriptor['user'] = $descriptor['username'];
+            unset($descriptor['username']);
+        }
+        if (isset($descriptor['dbname'])) {
+            $descriptor['database'] = $descriptor['dbname'];
+            unset($descriptor['dbname']);
+        }
+        //        if (isset($descriptor['options']) && isset($descriptor['options'][\PDO::MYSQL_ATTR_INIT_COMMAND])) {
+        //            $descriptor['charset'] = $descriptor['options'][\PDO::MYSQL_ATTR_INIT_COMMAND];
+        //        }
+        if (!isset($descriptor['strict_type'])) {
+            $descriptor['strict_type'] = false;
+        }
+        if (!isset($descriptor['fetch_mode'])) {
+            $descriptor['fetch_mode'] = true;
+        }
+        if (isset($descriptor['max_reconnection '])) {
+            $this->max_reconnection = $descriptor['fetch_mode'];
+        }
+        $this->_pdo = new CoroutineMySQL();
+        return $this->_pdo->connect($descriptor);
+    }
+
+
+    /**
+     * Author:Robert
+     *
+     * @return bool
+     */
+    public function reconnect(): bool
+    {
+        if ($this->_reconnection >= $this->max_reconnection - 1) {
+            throw new \PDOException('Retry connection failed');
+        }
+        if (!$this->connect($this->_descriptor)) {
+            $this->_reconnection++;
+        } else {
+            $this->_reconnection = 0;
+        }
+        return true;
+    }
 
     /**
      * Author:Robert
@@ -49,13 +156,14 @@ class Adapter implements AdapterInterface
      */
     public function query($sqlStatement, $bindParams = null, $bindTypes = null)
     {
-        list($sqlStatement, $bindParams) = $this->parseBind($sqlStatement, $bindParams, $bindTypes);
-        $this->_statement = $this->_pdo->prepare($sqlStatement);
-        if ($this->_statement) {
-            if ($this->_isDefer) {
-                $this->_pdo->setDefer();
+        $result = $this->execute($sqlStatement, $bindParams, $bindTypes);
+        if (!$result) {
+            if ($this->isConnectionError($this->_pdo->errno)) {
+                $this->reconnect();
+                return $this->query($sqlStatement, $bindParams, $bindTypes);
+            } else {
+                throw new \Exception($this->_pdo->error, $this->_pdo->errno);
             }
-            $this->_statement->execute($bindParams);
         }
         return new ResultPdo($this, $this->_statement, $sqlStatement, $bindParams, $bindTypes);
     }
@@ -74,13 +182,19 @@ class Adapter implements AdapterInterface
     {
         list($sqlStatement, $bindParams) = $this->parseBind($sqlStatement, $bindParams, $bindTypes);
         $this->_statement = $this->_pdo->prepare($sqlStatement);
-        if ($this->_statement) {
-            if ($this->_isDefer) {
-                $this->_pdo->setDefer();
+        if (!$this->_statement) {
+            if ($this->isConnectionError($this->_pdo->errno)) {
+                $this->reconnect();
+                return $this->execute($sqlStatement, $bindParams, $bindTypes);
+            } else {
+                throw new \Exception($this->_pdo->error, $this->_pdo->errno);
             }
-            if (!$this->_statement->execute($bindParams)) {
-                return false;
-            }
+        }
+        if ($this->_isDefer) {
+            $this->_pdo->setDefer();
+        }
+        if (!$this->_statement->execute($bindParams)) {
+            return false;
         }
         return true;
     }

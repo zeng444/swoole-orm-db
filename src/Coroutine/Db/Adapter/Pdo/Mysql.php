@@ -3,7 +3,6 @@
 namespace Janfish\Swoole\Coroutine\Db\Adapter\Pdo;
 
 use Janfish\Swoole\Coroutine\Db\Adapter as DBAdapter;
-use Swoole\Coroutine\MySQL as CoroutineMySQL;
 
 /**
  * Author:Robert
@@ -83,48 +82,6 @@ class Mysql extends DBAdapter
             preg_replace($pattern, '?', $statement),
             $bind,
         ];
-    }
-
-    /**
-     * Author:Robert
-     *
-     * @param array|null $descriptor
-     * @return bool
-     */
-    public function connect(array $descriptor = null): bool
-    {
-        if ($descriptor) {
-            $this->_descriptor = $descriptor;
-        }
-
-        if (!isset($descriptor['host'])) {
-            $descriptor['host'] = '127.0.0.1';
-        }
-        if (!isset($descriptor['port'])) {
-            $descriptor['host'] = 3306;
-        }
-        /**
-         * /兼容phalcon的判定
-         */
-        if (isset($descriptor['username'])) {
-            $descriptor['user'] = $descriptor['username'];
-            unset($descriptor['username']);
-        }
-        if (isset($descriptor['dbname'])) {
-            $descriptor['database'] = $descriptor['dbname'];
-            unset($descriptor['dbname']);
-        }
-        //        if (isset($descriptor['options']) && isset($descriptor['options'][\PDO::MYSQL_ATTR_INIT_COMMAND])) {
-        //            $descriptor['charset'] = $descriptor['options'][\PDO::MYSQL_ATTR_INIT_COMMAND];
-        //        }
-        if (!isset($descriptor['strict_type'])) {
-            $descriptor['strict_type'] = false;
-        }
-        if (!isset($descriptor['fetch_mode'])) {
-            $descriptor['fetch_mode'] = true;
-        }
-        $this->_pdo = new CoroutineMySQL();
-        return $this->_pdo->connect($descriptor);
     }
 
     /**
@@ -340,11 +297,10 @@ class Mysql extends DBAdapter
     /**
      * Author:Robert
      *
-     * @param bool $nesting
      * @return bool
      * @throws \Exception
      */
-    public function rollback(bool $nesting = true): bool
+    public function rollback(): bool
     {
         $pdo = $this->_pdo;
         if (!is_object($pdo)) {
