@@ -2,6 +2,12 @@
 
 namespace Janfish\Swoole;
 
+/**
+ * Author:Robert
+ *
+ * Class Pool
+ * @package Janfish\Swoole
+ */
 abstract class Pool
 {
 
@@ -61,21 +67,14 @@ abstract class Pool
         if (isset($options['max'])) {
             $this->max = $options['max'];
         }
-        if (isset($options['max_spare'])) {
-            $this->max = $options['max_spare'];
+        if (isset($options['min_spare_minute'])) {
+            $this->minSpareMinute = $options['min_spare_minute'];
         }
-        if (isset($options['minSpareMinute'])) {
-            $this->minSpareMinute = $options['minSpareMinute'];
-        }
-
         if (isset($options['min'])) {
             $this->min = $options['min'];
         }
         if (isset($options['min_spare'])) {
-            $this->minSpare = $options['max_spare'];
-        }
-        if (isset($options['max_spare'])) {
-            $this->maxSpare = $options['max_spare'];
+            $this->minSpare = $options['min_spare'];
         }
         if (isset($options['max_spare'])) {
             $this->maxSpare = $options['max_spare'];
@@ -87,21 +86,13 @@ abstract class Pool
 
     }
 
-    protected function init()
-    {
-        $quantity = ceil(($this->max - $this->min) / 2);
-        for ($i = 0; $i < $quantity; $i++) {
-            $this->addConnection($this->createConnection());
-        }
-    }
-
 
     /**
      * Author:Robert
      *
      * @return bool
      */
-    abstract function createConnection(): bool;
+    abstract function createConnection();
 
     /**
      * Author:Robert
@@ -115,12 +106,18 @@ abstract class Pool
     /**
      * Author:Robert
      *
-     * @param $connection
+     * @throws \Exception
      */
-    public function removeConnection($connection)
+    protected function init()
     {
-        $this->closeConnection($connection);
-        $this->createdConnection--;
+        $quantity = ceil(($this->max - $this->min) / 2);
+        for ($i = 0; $i < $quantity; $i++) {
+            $connection = $this->createConnection();
+            if (!$connection) {
+                throw new \Exception('sorry failure to create pool connection,PLZ check your connect method ');
+            }
+            $this->addConnection($connection);
+        }
     }
 
 
@@ -128,14 +125,35 @@ abstract class Pool
      * Author:Robert
      *
      * @param $connection
+     * @return bool
      */
-    private function addConnection($connection)
+    protected function removeConnection($connection): bool
     {
-        $this->pool->push([
+        if (!$this->closeConnection($connection)) {
+            return false;
+        }
+        $this->createdConnection--;
+        return true;
+    }
+
+
+    /**
+     * Author:Robert
+     *
+     * @param $connection
+     * @return bool
+     */
+    protected function addConnection($connection): bool
+    {
+        $data = [
             'lastAt' => time(),
             'connection' => $connection,
-        ]);
+        ];
+        if (!$this->pool->push($data)) {
+            return false;
+        }
         $this->createdConnection++;
+        return true;
     }
 
 

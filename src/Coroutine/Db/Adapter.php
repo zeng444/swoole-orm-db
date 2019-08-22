@@ -2,6 +2,7 @@
 
 namespace Janfish\Swoole\Coroutine\Db;
 
+use Phalcon\Db\Exception;
 use Swoole\Coroutine\MySQL as CoroutineMySQL;
 use Janfish\Swoole\Coroutine\Db\Result\Pdo as ResultPdo;
 
@@ -35,6 +36,12 @@ class Adapter implements AdapterInterface
      * @var
      */
     protected $_statement;
+
+
+    /**
+     * @var array|PoolInterface
+     */
+    private $_pool;
 
 
     /**
@@ -83,6 +90,36 @@ class Adapter implements AdapterInterface
     /**
      * Author:Robert
      *
+     * @return bool
+     */
+    protected function getConnection()
+    {
+        if ($this->_pool) {
+            $this->_pdo = $this->_pool->getConnection();
+        }
+        if (!$this->_pdo) {
+            return false;
+        }
+        return $this->_pdo;
+    }
+
+    /**
+     * Author:Robert
+     *
+     * @param $connection
+     * @return bool
+     */
+    protected function returnConnection($connection)
+    {
+        if ($this->_pool) {
+            return $this->_pool->return($connection, 0.001);
+        }
+        return true;
+    }
+
+    /**
+     * Author:Robert
+     *
      * @param array|null $descriptor
      * @return bool
      */
@@ -91,7 +128,6 @@ class Adapter implements AdapterInterface
         if ($descriptor) {
             $this->_descriptor = $descriptor;
         }
-
         if (!isset($descriptor['host'])) {
             $descriptor['host'] = '127.0.0.1';
         }
@@ -136,7 +172,13 @@ class Adapter implements AdapterInterface
         if ($this->_reconnection >= $this->max_reconnection) {
             throw new \PDOException('Retry connection failed');
         }
-        if (!$this->connect($this->_descriptor)) {
+        if ($this->_pool) {
+            $this->_pdo = $this->_pool->createConnection();
+            $result = true;
+        } else {
+            $result = $this->connect($this->_descriptor);
+        }
+        if (!$result) {
             $this->_reconnection++;
         } else {
             $this->_reconnection = 0;
@@ -156,25 +198,28 @@ class Adapter implements AdapterInterface
     public function query($sqlStatement, $bindParams = null, $bindTypes = null)
     {
         list($sqlStatement, $bindParams) = $this->parseBind($sqlStatement, $bindParams, $bindTypes);
-        $this->_statement = $this->_pdo->prepare($sqlStatement);
+        $pdo = $this->getConnection();
+        $this->_statement = $pdo->prepare($sqlStatement);
         if (!$this->_statement) {
-            if ($this->isConnectionError($this->_pdo->errno)) {
+            if ($this->isConnectionError($pdo->errno)) {
                 $this->reconnect();
                 return $this->execute($sqlStatement, $bindParams, $bindTypes);
             } else {
-                throw new \Exception($this->_pdo->error, $this->_pdo->errno);
+                $this->returnConnection($pdo);
+                throw new \Exception($pdo->error, $pdo->errno);
             }
         }
+        $this->returnConnection($pdo);
         if ($this->_isDefer) {
-            $this->_pdo->setDefer();
+            $pdo->setDefer();
         }
         $result = $this->_statement->execute($bindParams);
         if (!$result) {
-            if ($this->isConnectionError($this->_pdo->errno)) {
+            if ($this->isConnectionError($pdo->errno)) {
                 $this->reconnect();
                 return $this->query($sqlStatement, $bindParams, $bindTypes);
             } else {
-                throw new \Exception($this->_pdo->error, $this->_pdo->errno);
+                throw new \Exception($pdo->error, $pdo->errno);
             }
         }
         return new ResultPdo($this, $this->_statement, $sqlStatement, $bindParams, $bindTypes);
@@ -193,17 +238,20 @@ class Adapter implements AdapterInterface
     public function execute($sqlStatement, $bindParams = null, $bindTypes = null): bool
     {
         list($sqlStatement, $bindParams) = $this->parseBind($sqlStatement, $bindParams, $bindTypes);
-        $this->_statement = $this->_pdo->prepare($sqlStatement);
+        $pdo = $this->getConnection();
+        $this->_statement = $pdo->prepare($sqlStatement);
         if (!$this->_statement) {
-            if ($this->isConnectionError($this->_pdo->errno) && $this->isUnderTransaction() === false) {
+            if ($this->isConnectionError($pdo->errno) && $this->isUnderTransaction() === false) {
                 $this->reconnect();
                 return $this->execute($sqlStatement, $bindParams, $bindTypes);
             } else {
-                throw new \Exception($this->_pdo->error, $this->_pdo->errno);
+                $this->returnConnection($pdo);
+                throw new \Exception($pdo->error, $pdo->errno);
             }
         }
+        $this->returnConnection($pdo);
         if ($this->_isDefer) {
-            $this->_pdo->setDefer();
+            $pdo->setDefer();
         }
         if (!$this->_statement->execute($bindParams)) {
             return false;

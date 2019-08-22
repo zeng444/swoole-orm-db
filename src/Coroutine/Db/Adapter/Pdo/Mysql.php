@@ -3,6 +3,7 @@
 namespace Janfish\Swoole\Coroutine\Db\Adapter\Pdo;
 
 use Janfish\Swoole\Coroutine\Db\Adapter as DBAdapter;
+use Janfish\Swoole\Pool;
 
 /**
  * Author:Robert
@@ -42,14 +43,23 @@ class Mysql extends DBAdapter
      */
     protected $_escapeChar = '`';
 
+    /**
+     * @var array|PoolInterface
+     */
+    private $_pool;
+
 
     /**
-     * Pdo constructor.
-     * @param array $descriptor
+     * Mysql constructor.
+     * @param $descriptor
      */
-    public function __construct(array $descriptor)
+    public function __construct($descriptor)
     {
-        $this->connect($descriptor);
+        if (is_object($descriptor) && $descriptor instanceof Pool) {
+            $this->_pool = $descriptor;
+        } else {
+            $this->connect($descriptor);
+        }
     }
 
 
@@ -139,7 +149,7 @@ class Mysql extends DBAdapter
      */
     public function close(): bool
     {
-        $this->_pdo->close();
+        $this->getConnection()->close();
         return true;
     }
 
@@ -174,11 +184,11 @@ class Mysql extends DBAdapter
      */
     public function lastInsertId(): int
     {
-        $pdo = $this->_pdo;
+        $pdo = $this->getConnection();
         if (!is_object($pdo)) {
             return 0;
         }
-        return $this->_pdo->insert_id;
+        return $pdo->insert_id;
     }
 
 
@@ -189,10 +199,11 @@ class Mysql extends DBAdapter
      */
     public function affectedRows(): int
     {
-        if (!is_object($this->_pdo)) {
+        $pdo = $this->getConnection();
+        if (!is_object($pdo)) {
             return 0;
         }
-        return $this->_pdo->affected_rows;
+        return $pdo->affected_rows;
     }
 
 
@@ -205,8 +216,10 @@ class Mysql extends DBAdapter
      */
     public function begin(bool $nesting = true): bool
     {
-
-        $pdo = $this->_pdo;
+        if ($this->_pool) {
+            return true;
+        }
+        $pdo = $this->getConnection();
         if (!is_object($pdo)) {
             return false;
         }
@@ -222,11 +235,11 @@ class Mysql extends DBAdapter
 
         if ($transactionLevel == 1) {
             if ($pdo->begin() === false) {
-                if ($this->isConnectionError($this->_pdo->errno)) {
+                if ($this->isConnectionError($pdo->errno)) {
                     $this->reconnect();
                     return $this->begin($nesting);
                 } else {
-                    throw new \Exception($this->_pdo->error, $this->_pdo->errno);
+                    throw new \Exception($pdo->error, $pdo->errno);
                 }
             }
             return true;
@@ -253,8 +266,10 @@ class Mysql extends DBAdapter
      */
     public function commit(bool $nesting = true): bool
     {
-
-        $pdo = $this->_pdo;
+        if ($this->_pool) {
+            return true;
+        }
+        $pdo = $this->getConnection();
         if (!is_object($pdo)) {
             return false;
         }
@@ -307,7 +322,10 @@ class Mysql extends DBAdapter
      */
     public function rollback(): bool
     {
-        $pdo = $this->_pdo;
+        if ($this->_pool) {
+            return true;
+        }
+        $pdo = $this->getConnection();
         if (!is_object($pdo)) {
             return false;
         }

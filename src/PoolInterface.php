@@ -11,7 +11,7 @@ interface PoolInterface
      *
      * @return bool
      */
-    public function createConnection(): bool;
+    public function createConnection();
 
     /**
      * Author:Robert
