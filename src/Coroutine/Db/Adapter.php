@@ -155,7 +155,20 @@ class Adapter implements AdapterInterface
      */
     public function query($sqlStatement, $bindParams = null, $bindTypes = null)
     {
-        $result = $this->execute($sqlStatement, $bindParams, $bindTypes);
+        list($sqlStatement, $bindParams) = $this->parseBind($sqlStatement, $bindParams, $bindTypes);
+        $this->_statement = $this->_pdo->prepare($sqlStatement);
+        if (!$this->_statement) {
+            if ($this->isConnectionError($this->_pdo->errno)) {
+                $this->reconnect();
+                return $this->execute($sqlStatement, $bindParams, $bindTypes);
+            } else {
+                throw new \Exception($this->_pdo->error, $this->_pdo->errno);
+            }
+        }
+        if ($this->_isDefer) {
+            $this->_pdo->setDefer();
+        }
+        $result = $this->_statement->execute($bindParams);
         if (!$result) {
             if ($this->isConnectionError($this->_pdo->errno)) {
                 $this->reconnect();
@@ -182,7 +195,7 @@ class Adapter implements AdapterInterface
         list($sqlStatement, $bindParams) = $this->parseBind($sqlStatement, $bindParams, $bindTypes);
         $this->_statement = $this->_pdo->prepare($sqlStatement);
         if (!$this->_statement) {
-            if ($this->isConnectionError($this->_pdo->errno)) {
+            if ($this->isConnectionError($this->_pdo->errno) && $this->isUnderTransaction() === false) {
                 $this->reconnect();
                 return $this->execute($sqlStatement, $bindParams, $bindTypes);
             } else {

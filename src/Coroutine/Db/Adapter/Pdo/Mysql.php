@@ -167,12 +167,9 @@ class Mysql extends DBAdapter
     }
 
 
-
-
     /**
      * Author:Robert
      *
-     * @param null $sequenceName
      * @return int
      */
     public function lastInsertId(): int
@@ -197,7 +194,6 @@ class Mysql extends DBAdapter
         }
         return $this->_pdo->affected_rows;
     }
-
 
 
     /**
@@ -225,7 +221,16 @@ class Mysql extends DBAdapter
         $transactionLevel = (int)$this->_transactionLevel;
 
         if ($transactionLevel == 1) {
-            return $pdo->begin();
+            if ($pdo->begin() === false) {
+                if ($this->isConnectionError($this->_pdo->errno)) {
+                    $this->reconnect();
+                    return $this->begin($nesting);
+                } else {
+                    throw new \Exception($this->_pdo->error, $this->_pdo->errno);
+                }
+            }
+            return true;
+
         } else {
             /**
              * Check if the current database system supports nested transactions
@@ -400,6 +405,26 @@ class Mysql extends DBAdapter
     {
         $sql = "SAVEPOINT ".$name;
         return $this->execute($sql);
+    }
+
+    /**
+     * Author:Robert
+     *
+     * @return int
+     */
+    public function getTransactionLevel(): int
+    {
+        return $this->_transactionLevel;
+    }
+
+    /**
+     * Author:Robert
+     *
+     * @return bool
+     */
+    public function isUnderTransaction(): bool
+    {
+        return $this->_transactionLevel > 0;
     }
 
     /**

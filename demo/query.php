@@ -5,7 +5,7 @@ use Janfish\Swoole\Coroutine\Db\Adapter\Pdo\Mysql;
 include_once '../vendor/autoload.php';
 $descriptor = require_once 'configs/db.php';
 
-$sql = "SELECT * FROM `configuration`  WHERE id=:id or id=:id2 LI2MIT 0,1";
+$sql = "SELECT * FROM `configuration`  WHERE id=:id or id=:id2 LIMIT 0,1";
 $bind = [
     'id' => 1,
     'id2' => 1,
