@@ -5,7 +5,8 @@ use Janfish\Swoole\Coroutine\Db\Adapter\Pdo\Mysql;
 include_once '../vendor/autoload.php';
 $descriptor = require_once 'configs/db.php';
 
-$sql = "INSERT INTO `configuration` (`companyId`,`key`)values(:companyId,:key2)";
+$sql = "SELECT Sleep(2)";
+//$sql = "INSERT INTO `configuration` (`companyId`,`key`)values(:companyId,:key2)";
 $bind = [
     'companyId' => 1,
     'key2' => microtime(),
@@ -15,8 +16,9 @@ $bind = [
 go(function () use ($descriptor, $sql, $bind) {
     $mysql = new Mysql($descriptor);
     $mysql->setDefer();
-    $result = $mysql->execute($sql, $bind);
-    $mysql->recv();
+    //    $result = $mysql->execute($sql);
+    $mysql->execute($sql);
+    $result = $mysql->recv();
     if (!$result) {
         echo "error:".$mysql->errno.$mysql->error.PHP_EOL;
     }

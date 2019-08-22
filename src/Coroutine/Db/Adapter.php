@@ -203,7 +203,7 @@ class Adapter implements AdapterInterface
         if (!$this->_statement) {
             if ($this->isConnectionError($pdo->errno)) {
                 $this->reconnect();
-                return $this->execute($sqlStatement, $bindParams, $bindTypes);
+                return $this->query($sqlStatement, $bindParams, $bindTypes);
             } else {
                 $this->returnConnection($pdo);
                 throw new \Exception($pdo->error, $pdo->errno);
@@ -276,11 +276,11 @@ class Adapter implements AdapterInterface
     public function recv()
     {
         $this->_isDefer = false;
-        $result = $this->_pdo->recv();
+        $result = $this->_statement->recv();
         if (!$result) {
             return false;
         }
-        return true;
+        return $result;
 
     }
 

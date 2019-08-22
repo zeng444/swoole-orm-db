@@ -56,6 +56,7 @@ class Mysql extends DBAdapter
     public function __construct($descriptor)
     {
         if (is_object($descriptor) && $descriptor instanceof Pool) {
+
             $this->_pool = $descriptor;
         } else {
             $this->connect($descriptor);

@@ -82,6 +82,11 @@ class Pdo
         return $this->fetch();
     }
 
+    public function recv()
+    {
+        $this->_pdoStatement->recv();
+    }
+
     //    /**
     //     * Author:Robert
     //     *
