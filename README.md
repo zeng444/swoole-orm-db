@@ -24,14 +24,21 @@ $db2 =  $di->db;
 $db->setDefer();
 $db2->setDefer();
 
-$result = $mysql->query($sql);
-$result2 = $mysql2->query($sql);
+$statement = $mysql->query($sql);
+$statement2 = $mysql2->query($sql);
 
-$db->recv();
-$db2->recv();
+$result = $db->recv();
+$result2 = $db2->recv();
 
-$row = $result->fetch();
-$row2 = $result2->fetch();
+if (!$result) {
+    echo "error:".$mysql->errno.$mysql->error.PHP_EOL;
+}
+if (!$result2) {
+    echo "error:".$mysql->errno.$mysql->error.PHP_EOL;
+}
+    
+$row = $statement->fetch();
+$row2 = $statement2->fetch();
 
 print_r($row);
 print_r($row2);
@@ -45,8 +52,8 @@ for($i=0;$i<100,$++){
     $sql= '.....';
     $db = $di->db;
     $db->setDefer();
-    $result = $db->execute($sql);
-    $db->recv();
+    $db->execute($sql);
+    $result = $db->recv();
     if (!$result) {
         echo "error:".$mysql->errno.$mysql->error.PHP_EOL;
     }
@@ -80,7 +87,7 @@ $mysql = new Myql( $descriptor);
 
 // 数据库连接池的数据库实例
 $mysql = new Myql(new MysqlPool($descriptor,[
-   'min'=>100', //最小连接进程
+   'min'=>100, //最小连接进程
    'max'=>100, //最大连接进程
    'min_spare_minute'=>2, //gc回收周期单位分钟
    'min_spare'=>100, //最小空闲进程
