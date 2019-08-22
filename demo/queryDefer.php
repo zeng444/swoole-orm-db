@@ -9,20 +9,6 @@ $sql = "SELECT Sleep(2)";
 
 go(function () use ($descriptor, $sql) {
 
-    //    $time = microtime(true);
-    //    $mysql = new Mysql($descriptor);
-    //    $mysql2 = new Mysql($descriptor);
-    //    $mysql->setDefer();
-    //    $mysql2->setDefer();
-    //    $result = $mysql->query($sql);
-    //    $result2 = $mysql2->query($sql);
-    //    $mysql->recv();
-    //    $mysql2->recv();
-    //    $row = $result->fetch();
-    //    $row2 = $result2->fetch();
-    //    echo microtime(true) - $time.PHP_EOL;
-    //    print_r($row);
-    //    print_r($row2);
 
     $time = microtime(true);
 
