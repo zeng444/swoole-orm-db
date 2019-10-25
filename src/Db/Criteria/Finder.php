@@ -17,7 +17,7 @@ class Finder
     /**
      * @var
      */
-    protected $dateColumns;
+    protected $dateColumns = [];
 
     /**
      * @var
@@ -287,6 +287,7 @@ class Finder
             'limit' => $this->limit,
         ];
         foreach ($this->conditions as $column => $value) {
+
             if (in_array($column, $this->dateColumns)) {
                 if (is_array($value)) {
                     $startValue = $value[0] ?? '';
@@ -305,6 +306,15 @@ class Finder
                     $whereSql[] = "`$column` = :$column";
                     $bind[$column] = $value;
                 }
+            } elseif (is_array($value)) {
+                $holder = [];
+                foreach ($value as $key => $it) {
+                    $holder[] = ':'.$column.$key;
+                    $bind[$column.$key] = $it;
+                }
+                if ($holder) {
+                    $whereSql[] = "`$column` IN (".implode(',', $holder).")";
+                }
             } elseif (in_array($column, $this->fullTextColumns)) {
                 $whereSql[] = "`$column` LIKE :$column";
                 $bind[$column] = "%$value%";
@@ -320,8 +330,8 @@ class Finder
         $sort = $sort ? 'ORDER BY '.$sort : '';
         $this->sql = "SELECT {$columns} FROM  {$schema}`{$this->table}` $whereSql $sort LIMIT :offset,:limit";
         $this->bind = $bind;
-
         echo $this->sql.PHP_EOL;
+        print_r($bind);
         return [$this->sql, $this->bind];
     }
 
