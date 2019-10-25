@@ -72,9 +72,27 @@ class Finder
     /**
      * @var
      */
+    protected $sort;
+
+    /**
+     * @var string
+     */
+    protected $mode = self::MYSQL_MODE;
+
+    /**
+     * @var
+     */
     protected $returnData = Db::FETCH_ASSOC;
 
+    /**
+     *
+     */
+    const MYSQL_MODE = 'MYSQL';
 
+    /**
+     * Finder constructor.
+     * @param array $options
+     */
     public function __construct($options = [])
     {
         if (isset($options['returnData'])) {
@@ -83,14 +101,41 @@ class Finder
     }
 
     /**
+     * 设置模式以后
+     * Author:Robert
+     *
+     */
+    public function setMode()
+    {
+        $this->mode = self::MYSQL_MODE;
+        return $this;
+    }
+
+    /**
      * 设置schema
      * Author:Robert
      *
      * @param $schema
+     * @return $this
      */
     public function setSchema($schema)
     {
         $this->schema = $schema;
+        return $this;
+    }
+
+
+    /**
+     * 设置排序
+     * Author:Robert
+     *
+     * @param  $rule
+     * @return $this
+     */
+    public function setSort($rule)
+    {
+        $this->sort = $rule;
+        return $this;
     }
 
     /**
@@ -98,10 +143,12 @@ class Finder
      * Author:Robert
      *
      * @param $table
+     * @return $this
      */
     public function setTable($table)
     {
         $this->table = $table;
+        return $this;
     }
 
     /**
@@ -117,10 +164,16 @@ class Finder
         return $this;
     }
 
-
+    /**
+     * Author:Robert
+     *
+     * @param $db
+     * @return $this
+     */
     public function setDbService($db)
     {
         $this->db = $db;
+        return $this;
     }
 
     /**
@@ -200,6 +253,27 @@ class Finder
     }
 
     /**
+     * Author:Robert
+     *
+     * @return string
+     */
+    private function makeSortSQL(): string
+    {
+        if (!$this->sort) {
+            return '';
+        }
+        if (is_array($this->sort)) {
+            $sql = [];
+            foreach ($this->sort as $column => $command) {
+                $sql[] = "`$column` $command";
+            }
+            return implode(',', $sql);
+        } else {
+            return $this->sort;
+        }
+    }
+
+    /**
      * 生成查询参数
      * Author:Robert
      *
@@ -242,8 +316,12 @@ class Finder
         $whereSql = $whereSql ? "WHERE ".implode(' AND ', $whereSql) : '';
         $columns = $this->columns ? '`'.implode('`,`', $this->columns).'`' : '*';
         $schema = $this->schema ? "`{$this->schema}`." : '';
-        $this->sql = "SELECT {$columns} FROM  {$schema}`{$this->table}` $whereSql LIMIT :offset,:limit";
+        $sort = $this->makeSortSQL();
+        $sort = $sort ? 'ORDER BY '.$sort : '';
+        $this->sql = "SELECT {$columns} FROM  {$schema}`{$this->table}` $whereSql $sort LIMIT :offset,:limit";
         $this->bind = $bind;
+
+        echo $this->sql.PHP_EOL;
         return [$this->sql, $this->bind];
     }
 
