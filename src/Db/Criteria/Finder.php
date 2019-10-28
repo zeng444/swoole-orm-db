@@ -274,6 +274,17 @@ class Finder
     }
 
     /**
+     * Author:Robert
+     *
+     * @return string
+     */
+    private function makeColumnSQL()
+    {
+        $columns = $this->columns ? '`'.implode('`,`', $this->columns).'`' : '*';
+        return $columns;
+    }
+
+    /**
      * 生成查询参数
      * Author:Robert
      *
@@ -287,7 +298,6 @@ class Finder
             'limit' => $this->limit,
         ];
         foreach ($this->conditions as $column => $value) {
-
             if (in_array($column, $this->dateColumns)) {
                 if (is_array($value)) {
                     $startValue = $value[0] ?? '';
@@ -324,14 +334,12 @@ class Finder
             }
         }
         $whereSql = $whereSql ? "WHERE ".implode(' AND ', $whereSql) : '';
-        $columns = $this->columns ? '`'.implode('`,`', $this->columns).'`' : '*';
+        $columns = $this->makeColumnSQL();
         $schema = $this->schema ? "`{$this->schema}`." : '';
         $sort = $this->makeSortSQL();
         $sort = $sort ? 'ORDER BY '.$sort : '';
         $this->sql = "SELECT {$columns} FROM  {$schema}`{$this->table}` $whereSql $sort LIMIT :offset,:limit";
         $this->bind = $bind;
-        echo $this->sql.PHP_EOL;
-        print_r($bind);
         return [$this->sql, $this->bind];
     }
 
