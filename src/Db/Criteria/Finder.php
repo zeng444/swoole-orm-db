@@ -75,6 +75,11 @@ class Finder
     protected $sort;
 
     /**
+     * @var
+     */
+    private $hideColumns = [];
+
+    /**
      * @var string
      */
     protected $mode = self::MYSQL_MODE;
@@ -199,6 +204,13 @@ class Finder
     public function defineFullTextColumns(array $columns)
     {
         $this->fullTextColumns = $columns;
+        return $this;
+    }
+
+
+    public function defineHideColumns(array $columns)
+    {
+        $this->hideColumns = $columns;
         return $this;
     }
 
@@ -343,6 +355,25 @@ class Finder
         return [$this->sql, $this->bind];
     }
 
+
+    /**
+     * Author:Robert
+     *
+     * @param array $items
+     * @return array
+     */
+    public function removeHideColumns(array $items)
+    {
+        $rules = [];
+        foreach ($this->hideColumns as $rule) {
+            $rules[$rule] = 0;
+        }
+        return array_map(function ($item) use ($rules) {
+            return array_diff_key($item, $rules);
+        }, $items);
+
+    }
+
     /**
      * 获取数据结果
      * Author:Robert
@@ -366,6 +397,9 @@ class Finder
             'offset' => \PDO::PARAM_INT,
             'limit' => \PDO::PARAM_INT,
         ]);
+        if ($this->hideColumns) {
+            return $this->removeHideColumns($items);
+        }
         return $items;
     }
 
