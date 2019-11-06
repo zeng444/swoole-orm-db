@@ -57,7 +57,7 @@ class Finder
     /**
      * @var string
      */
-    protected $sql = '';
+    protected $sql = [];
 
     /**
      * @var array
@@ -257,9 +257,9 @@ class Finder
      * 生成sql
      * Author:Robert
      *
-     * @return string
+     * @return array
      */
-    public function getSQL(): string
+    public function getSQL(): array
     {
         return $this->sql;
     }
@@ -302,7 +302,7 @@ class Finder
      *
      * @return array
      */
-    public function generateParams()
+    public function generateParams(): array
     {
         $whereSql = [];
         $bind = [
@@ -312,17 +312,27 @@ class Finder
         foreach ($this->conditions as $column => $value) {
             if (in_array($column, $this->dateColumns)) {
                 if (is_array($value)) {
-                    $startValue = $value[0] ?? '';
-                    $endValue = $value[1] ?? '';
-                    if ($startValue) {
-                        $startBind = $column.'0';
-                        $whereSql[] = "`$column`>=:{$startBind}";
-                        $bind[$startBind] = $startValue;
-                    }
-                    if ($endValue) {
-                        $endBind = $column.'1';
-                        $whereSql[] = "`$column`<=:{$endBind}";
-                        $bind[$endBind] = $endValue;
+                    if ((isset($value['in']) or isset($value['notIn'])) && $value) {
+                        $holder = [];
+                        foreach ($value as $key => $it) {
+                            $holder[] = ':'.$column.$key;
+                            $bind[$column.$key] = $it;
+                        }
+                        $eq = isset($value['in']) ? 'IN' : 'NOT IN';
+                        $whereSql[] = "`$column` $eq (".implode(',', $holder).")";
+                    } else {
+                        $startValue = $value[0] ?? '';
+                        $endValue = $value[1] ?? '';
+                        if ($startValue) {
+                            $startBind = $column.'0';
+                            $whereSql[] = "`$column`>=:{$startBind}";
+                            $bind[$startBind] = $startValue;
+                        }
+                        if ($endValue) {
+                            $endBind = $column.'1';
+                            $whereSql[] = "`$column`<=:{$endBind}";
+                            $bind[$endBind] = $endValue;
+                        }
                     }
                 } else {
                     $whereSql[] = "`$column` = :$column";
@@ -345,12 +355,15 @@ class Finder
                 $bind[$column] = $value;
             }
         }
-        $whereSql = $whereSql ? "WHERE ".implode(' AND ', $whereSql) : '';
+        $whereSql = $whereSql ? implode(' AND ', $whereSql) : '';
         $columns = $this->makeColumnSQL();
         $schema = $this->schema ? "`{$this->schema}`." : '';
         $sort = $this->makeSortSQL();
-        $sort = $sort ? 'ORDER BY '.$sort : '';
-        $this->sql = "SELECT {$columns} FROM  {$schema}`{$this->table}` $whereSql $sort LIMIT :offset,:limit";
+        $this->sql['SELECT'] = $columns;
+        $this->sql['FROM'] = "{$schema}`{$this->table}`";
+        $this->sql['WHERE'] = $whereSql ? 'WHERE '.$whereSql : '';
+        $this->sql['ORDER'] = $sort ? 'ORDER BY '.$sort : '';
+        $this->sql['LIMIT'] = ":offset,:limit";
         $this->bind = $bind;
         return [$this->sql, $this->bind];
     }
@@ -375,6 +388,33 @@ class Finder
     }
 
     /**
+     * Author:Robert
+     *
+     * @return mixed
+     * @throws \Exception
+     */
+    public function count(): int
+    {
+        $fetchParams = $this->generateParams();
+        $fetchParams = $this->generateParams();
+        if (!$this->db) {
+            $di = Di::getDefault();
+            $this->db = $di->get('db');
+        }
+        if (!$this->db) {
+            throw new \Exception('db service not exist');
+        }
+        list($sqlData, $bind) = $fetchParams;
+        $sql = "SELECT count(`id`) as `count` FROM {$sqlData['FROM']} {$sqlData['WHERE']} LIMIT {$sqlData['LIMIT']}";
+        $bind['limit'] = 1;
+        $result = $this->db->fetchOne($sql, Db::FETCH_ASSOC, $bind, [
+            'offset' => \PDO::PARAM_INT,
+            'limit' => \PDO::PARAM_INT,
+        ]);
+        return $result['count'];
+    }
+
+    /**
      * 获取数据结果
      * Author:Robert
      *
@@ -393,7 +433,9 @@ class Finder
             throw new \Exception('db service not exist');
         }
         $returnType = $returnType ?: $this->returnData;
-        $items = $this->db->fetchAll($fetchParams[0], $returnType, $fetchParams[1], [
+        list($sqlData, $bind) = $fetchParams;
+        $sql = "SELECT {$sqlData['SELECT']} FROM {$sqlData['FROM']} {$sqlData['WHERE']} {$sqlData['ORDER']} LIMIT {$sqlData['LIMIT']}";
+        $items = $this->db->fetchAll($sql, $returnType, $bind, [
             'offset' => \PDO::PARAM_INT,
             'limit' => \PDO::PARAM_INT,
         ]);
