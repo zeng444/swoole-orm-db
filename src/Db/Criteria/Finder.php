@@ -10,7 +10,7 @@ use Phalcon\Di;
  * Author:Robert
  *
  * Class Finder
- * @package Janfish\Swoole\Criteria'
+ * @package Janfish\Swoole\Criteria
  */
 class Finder
 {
@@ -55,7 +55,7 @@ class Finder
     protected $limit = 10;
 
     /**
-     * @var string
+     * @var array
      */
     protected $sql = [];
 
@@ -396,7 +396,6 @@ class Finder
     public function count(): int
     {
         $fetchParams = $this->generateParams();
-        $fetchParams = $this->generateParams();
         if (!$this->db) {
             $di = Di::getDefault();
             $this->db = $di->get('db');
@@ -407,6 +406,7 @@ class Finder
         list($sqlData, $bind) = $fetchParams;
         $sql = "SELECT count(`id`) as `count` FROM {$sqlData['FROM']} {$sqlData['WHERE']} LIMIT {$sqlData['LIMIT']}";
         $bind['limit'] = 1;
+        $bind['offset'] = 0;
         $result = $this->db->fetchOne($sql, Db::FETCH_ASSOC, $bind, [
             'offset' => \PDO::PARAM_INT,
             'limit' => \PDO::PARAM_INT,
