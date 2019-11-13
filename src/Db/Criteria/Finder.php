@@ -22,7 +22,7 @@ class Finder
     /**
      * @var
      */
-    protected $fullTextColumns;
+    protected $fullTextColumns = [];
 
     /**
      * @var
