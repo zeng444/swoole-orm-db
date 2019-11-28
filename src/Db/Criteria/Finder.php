@@ -52,7 +52,7 @@ class Finder
     /**
      * @var int
      */
-    protected $limit = 10;
+    protected $limit = 1;
 
     /**
      * @var array
@@ -93,6 +93,11 @@ class Finder
      *
      */
     const MYSQL_MODE = 'MYSQL';
+
+    /**
+     * TODO 暂不支持
+     */
+    const ES_MODE = 'ES';
 
     /**
      * Finder constructor.
@@ -207,7 +212,31 @@ class Finder
         return $this;
     }
 
+    /**
+     * Author:Robert
+     *
+     * @param array $columns
+     * @return $this
+     */
+    public function defineTypeColumns(array $columns)
+    {
+        if (isset($columns['date'])) {
+            $this->defineDateColumns($columns['date']);
+        }
+        if (isset($columns['fullText'])) {
+            $this->defineDateColumns($columns['fullText']);
+        }
+        return $this;
+    }
 
+
+    /**
+     * 定义隐藏的列，SELECT *时不返回
+     * Author:Robert
+     *
+     * @param array $columns
+     * @return $this
+     */
     public function defineHideColumns(array $columns)
     {
         $this->hideColumns = $columns;
@@ -222,10 +251,15 @@ class Finder
      * @param $limit
      * @return $this
      */
-    public function setPagination($offset, $limit)
+    public function setPagination($offset, $limit = null)
     {
-        $this->offset = $offset;
-        $this->limit = $limit;
+        if ($limit === null) {
+            $this->offset = 0;
+            $this->limit = $offset;
+        } else {
+            $this->offset = $offset;
+            $this->limit = $limit;
+        }
         return $this;
     }
 
