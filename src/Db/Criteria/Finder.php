@@ -312,40 +312,40 @@ class Finder
         foreach ($this->conditions as $column => $value) {
             if (in_array($column, $this->dateColumns)) {
                 if (is_array($value)) {
-                    if ((isset($value['in']) or isset($value['notIn'])) && $value) {
-                        $holder = [];
-                        foreach ($value as $key => $it) {
-                            $holder[] = ':'.$column.$key;
-                            $bind[$column.$key] = $it;
-                        }
-                        $eq = isset($value['in']) ? 'IN' : 'NOT IN';
-                        $whereSql[] = "`$column` $eq (".implode(',', $holder).")";
-                    } else {
-                        $startValue = $value[0] ?? '';
-                        $endValue = $value[1] ?? '';
-                        if ($startValue) {
-                            $startBind = $column.'0';
-                            $whereSql[] = "`$column`>=:{$startBind}";
-                            $bind[$startBind] = $startValue;
-                        }
-                        if ($endValue) {
-                            $endBind = $column.'1';
-                            $whereSql[] = "`$column`<=:{$endBind}";
-                            $bind[$endBind] = $endValue;
-                        }
+                    $startValue = $value[0] ?? '';
+                    $endValue = $value[1] ?? '';
+                    if ($startValue) {
+                        $startBind = $column.'0';
+                        $whereSql[] = "`$column`>=:{$startBind}";
+                        $bind[$startBind] = $startValue;
+                    }
+                    if ($endValue) {
+                        $endBind = $column.'1';
+                        $whereSql[] = "`$column`<=:{$endBind}";
+                        $bind[$endBind] = $endValue;
                     }
                 } else {
                     $whereSql[] = "`$column` = :$column";
                     $bind[$column] = $value;
                 }
-            } elseif (is_array($value)) {
+            } elseif (is_array($value) && $value) {
                 $holder = [];
-                foreach ($value as $key => $it) {
-                    $holder[] = ':'.$column.$key;
-                    $bind[$column.$key] = $it;
-                }
-                if ($holder) {
-                    $whereSql[] = "`$column` IN (".implode(',', $holder).")";
+                if ((isset($value['in']) or isset($value['notIn']))) {
+                    $eq = isset($value['in']) ? 'IN' : 'NOT IN';
+                    $values = $eq === 'IN' ? $value['in'] : $value['notIn'];
+                    foreach ($values as $key => $it) {
+                        $holder[] = ':'.$column.$key;
+                        $bind[$column.$key] = $it;
+                    }
+                    $whereSql[] = "`$column` $eq (".implode(',', $holder).")";
+                } else {
+                    foreach ($value as $key => $it) {
+                        $holder[] = ':'.$column.$key;
+                        $bind[$column.$key] = $it;
+                    }
+                    if ($holder) {
+                        $whereSql[] = "`$column` IN (".implode(',', $holder).")";
+                    }
                 }
             } elseif (in_array($column, $this->fullTextColumns)) {
                 $whereSql[] = "`$column` LIKE :$column";
