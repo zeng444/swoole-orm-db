@@ -224,7 +224,7 @@ class Finder
             $this->defineDateColumns($columns['date']);
         }
         if (isset($columns['fullText'])) {
-            $this->defineDateColumns($columns['fullText']);
+            $this->defineFullTextColumns($columns['fullText']);
         }
         return $this;
     }
