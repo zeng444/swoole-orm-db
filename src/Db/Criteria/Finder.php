@@ -324,7 +324,7 @@ class Finder
      *
      * @return string
      */
-    private function makeColumnSQL()
+    private function makeColumnSQL(): string
     {
         if (!$this->columns) {
             return '*';
@@ -336,7 +336,6 @@ class Finder
             } else {
                 $columns[] = "`{$field}` AS `{$alias}`";
             }
-
         }
         return implode(',', $columns);
     }
@@ -449,7 +448,7 @@ class Finder
             throw new \Exception('db service not exist');
         }
         list($sqlData, $bind) = $fetchParams;
-        $sql = "SELECT count(`id`) as `count` FROM {$sqlData['FROM']} {$sqlData['WHERE']} LIMIT {$sqlData['LIMIT']}";
+        $sql = "SELECT count(`id`) AS `count` FROM {$sqlData['FROM']} {$sqlData['WHERE']} LIMIT {$sqlData['LIMIT']}";
         $bind['limit'] = 1;
         $bind['offset'] = 0;
         $result = $this->db->fetchOne($sql, Db::FETCH_ASSOC, $bind, [
