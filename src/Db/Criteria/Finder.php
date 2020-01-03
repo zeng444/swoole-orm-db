@@ -326,8 +326,19 @@ class Finder
      */
     private function makeColumnSQL()
     {
-        $columns = $this->columns ? '`'.implode('`,`', $this->columns).'`' : '*';
-        return $columns;
+        if (!$this->columns) {
+            return '*';
+        }
+        $columns = [];
+        foreach ($this->columns as $field => $alias) {
+            if (is_int($field)) {
+                $columns[] = "`{$alias}`";
+            } else {
+                $columns[] = "`{$field}` AS `{$alias}`";
+            }
+
+        }
+        return implode(',', $columns);
     }
 
     /**
