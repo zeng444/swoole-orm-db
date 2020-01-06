@@ -489,4 +489,29 @@ class Finder
         return $items;
     }
 
+    /**
+     * Author:Robert
+     *
+     * @param null $returnType
+     * @return array
+     * @throws \Exception
+     */
+    public function fetchOne($returnType = null): array
+    {
+        $this->setPagination(1);
+        return current($this->execute($returnType));
+    }
+
+    /**
+     * Author:Robert
+     *
+     * @param null $returnType
+     * @return array
+     * @throws \Exception
+     */
+    public function fetchAll($returnType = null): array
+    {
+        return $this->execute($returnType);
+    }
+
 }
