@@ -2,6 +2,7 @@
 
 namespace Janfish\Swoole\Db\Criteria;
 
+use Janfish\Swoole\Db\Criteria\Finder\Condition;
 use Phalcon\Db;
 use Phalcon\Di;
 
@@ -15,89 +16,73 @@ use Phalcon\Di;
 class Finder
 {
     /**
-     * @var
-     */
-    protected $dateColumns = [];
-
-    /**
-     * @var
-     */
-    protected $fullTextColumns = [];
-
-    /**
-     * @var
-     */
-    protected $columns;
-
-    /**
-     * @var array
-     */
-    protected $conditions = [];
-
-    /**
-     * @var
-     */
-    protected $schema;
-
-    /**
-     * @var
-     */
-    protected $table;
-
-    /**
-     * @var int
-     */
-    protected $offset = 0;
-
-    /**
-     * @var int
-     */
-    protected $limit = 1;
-
-    /**
-     * @var array
-     */
-    protected $sql = [];
-
-    /**
-     * @var array
-     */
-    protected $bind = [];
-
-    /**
-     * @var
-     */
-    protected $db;
-
-    /**
-     * @var
-     */
-    protected $sort;
-
-    /**
-     * @var
-     */
-    private $hideColumns = [];
-
-    /**
-     * @var string
-     */
-    protected $mode = self::MYSQL_MODE;
-
-    /**
-     * @var
-     */
-    protected $returnData = Db::FETCH_ASSOC;
-
-    /**
      *
      */
     const MYSQL_MODE = 'MYSQL';
-
     /**
      * TODO 暂不支持
      */
     const ES_MODE = 'ES';
+    /**
+     * @var
+     */
+    protected $dateColumns = [];
+    /**
+     * @var
+     */
+    protected $fullTextColumns = [];
+    /**
+     * @var
+     */
+    protected $columns;
+    /**
+     * @var array
+     */
+    protected $conditions = [];
+    /**
+     * @var
+     */
+    protected $schema;
+    /**
+     * @var
+     */
+    protected $table;
+    /**
+     * @var int
+     */
+    protected $offset = 0;
+    /**
+     * @var int
+     */
+    protected $limit = 1;
+    /**
+     * @var array
+     */
+    protected $sql = [];
+    /**
+     * @var array
+     */
+    protected $bind = [];
+    /**
+     * @var
+     */
+    protected $db;
+    /**
+     * @var
+     */
+    protected $sort;
+    /**
+     * @var string
+     */
+    protected $mode = self::MYSQL_MODE;
+    /**
+     * @var
+     */
+    protected $returnData = Db::FETCH_ASSOC;
+    /**
+     * @var
+     */
+    private $hideColumns = [];
 
     /**
      * Finder constructor.
@@ -299,48 +284,6 @@ class Finder
     }
 
     /**
-     * Author:Robert
-     *
-     * @return string
-     */
-    private function makeSortSQL(): string
-    {
-        if (!$this->sort) {
-            return '';
-        }
-        if (is_array($this->sort)) {
-            $sql = [];
-            foreach ($this->sort as $column => $command) {
-                $sql[] = "`$column` $command";
-            }
-            return implode(',', $sql);
-        } else {
-            return $this->sort;
-        }
-    }
-
-    /**
-     * Author:Robert
-     *
-     * @return string
-     */
-    private function makeColumnSQL(): string
-    {
-        if (!$this->columns) {
-            return '*';
-        }
-        $columns = [];
-        foreach ($this->columns as $field => $alias) {
-            if (is_int($field)) {
-                $columns[] = "`{$alias}`";
-            } else {
-                $columns[] = "`{$field}` AS `{$alias}`";
-            }
-        }
-        return implode(',', $columns);
-    }
-
-    /**
      * 生成查询参数
      * Author:Robert
      *
@@ -348,58 +291,11 @@ class Finder
      */
     public function generateParams(): array
     {
-        $whereSql = [];
-        $bind = [
-            'offset' => $this->offset,
-            'limit' => $this->limit,
-        ];
-        foreach ($this->conditions as $column => $value) {
-            if (in_array($column, $this->dateColumns)) {
-                if (is_array($value)) {
-                    $startValue = $value[0] ?? '';
-                    $endValue = $value[1] ?? '';
-                    if ($startValue) {
-                        $startBind = $column.'0';
-                        $whereSql[] = "`$column`>=:{$startBind}";
-                        $bind[$startBind] = $startValue;
-                    }
-                    if ($endValue) {
-                        $endBind = $column.'1';
-                        $whereSql[] = "`$column`<=:{$endBind}";
-                        $bind[$endBind] = $endValue;
-                    }
-                } else {
-                    $whereSql[] = "`$column` = :$column";
-                    $bind[$column] = $value;
-                }
-            } elseif (is_array($value) && $value) {
-                $holder = [];
-                if ((isset($value['in']) or isset($value['notIn']))) {
-                    $eq = isset($value['in']) ? 'IN' : 'NOT IN';
-                    $values = $eq === 'IN' ? $value['in'] : $value['notIn'];
-                    foreach ($values as $key => $it) {
-                        $holder[] = ':'.$column.$key;
-                        $bind[$column.$key] = $it;
-                    }
-                    $whereSql[] = "`$column` $eq (".implode(',', $holder).")";
-                } else {
-                    foreach ($value as $key => $it) {
-                        $holder[] = ':'.$column.$key;
-                        $bind[$column.$key] = $it;
-                    }
-                    if ($holder) {
-                        $whereSql[] = "`$column` IN (".implode(',', $holder).")";
-                    }
-                }
-            } elseif (in_array($column, $this->fullTextColumns)) {
-                $whereSql[] = "`$column` LIKE :$column";
-                $bind[$column] = "%$value%";
-            } else {
-                $whereSql[] = "`$column` = :$column";
-                $bind[$column] = $value;
-            }
-        }
-        $whereSql = $whereSql ? implode(' AND ', $whereSql) : '';
+        $conditions = new Condition($this->conditions,[
+            'date'=>$this->dateColumns,
+            'fullText'=>$this->fullTextColumns,
+        ]);
+        list($whereSql, $bind) = $conditions->generate();
         $columns = $this->makeColumnSQL();
         $schema = $this->schema ? "`{$this->schema}`." : '';
         $sort = $this->makeSortSQL();
@@ -408,10 +304,12 @@ class Finder
         $this->sql['WHERE'] = $whereSql ? 'WHERE '.$whereSql : '';
         $this->sql['ORDER'] = $sort ? 'ORDER BY '.$sort : '';
         $this->sql['LIMIT'] = ":offset,:limit";
-        $this->bind = $bind;
+        $this->bind = array_merge($bind, [
+            'offset' => $this->offset,
+            'limit' => $this->limit,
+        ]);
         return [$this->sql, $this->bind];
     }
-
 
     /**
      * Author:Robert
@@ -434,10 +332,11 @@ class Finder
     /**
      * Author:Robert
      *
-     * @return mixed
+     * @param string $countKey
+     * @return int
      * @throws \Exception
      */
-    public function count(): int
+    public function count(string $countKey = 'id'): int
     {
         $fetchParams = $this->generateParams();
         if (!$this->db) {
@@ -448,7 +347,7 @@ class Finder
             throw new \Exception('db service not exist');
         }
         list($sqlData, $bind) = $fetchParams;
-        $sql = "SELECT count(`id`) AS `count` FROM {$sqlData['FROM']} {$sqlData['WHERE']} LIMIT {$sqlData['LIMIT']}";
+        $sql = "SELECT count(`{$countKey}`) as `count` FROM {$sqlData['FROM']} {$sqlData['WHERE']} LIMIT {$sqlData['LIMIT']}";
         $bind['limit'] = 1;
         $bind['offset'] = 0;
         $result = $this->db->fetchOne($sql, Db::FETCH_ASSOC, $bind, [
@@ -456,6 +355,31 @@ class Finder
             'limit' => \PDO::PARAM_INT,
         ]);
         return $result['count'];
+    }
+
+    /**
+     * Author:Robert
+     *
+     * @param null $returnType
+     * @return array
+     * @throws \Exception
+     */
+    public function fetchOne($returnType = null): array
+    {
+        $this->setPagination(1);
+        return current($this->execute($returnType));
+    }
+
+    /**
+     * Author:Robert
+     *
+     * @param null $returnType
+     * @return array
+     * @throws \Exception
+     */
+    public function fetchAll($returnType = null): array
+    {
+        return $this->execute($returnType);
     }
 
     /**
@@ -492,26 +416,44 @@ class Finder
     /**
      * Author:Robert
      *
-     * @param null $returnType
-     * @return array
-     * @throws \Exception
+     * @return string
      */
-    public function fetchOne($returnType = null): array
+    private function makeSortSQL(): string
     {
-        $this->setPagination(1);
-        return current($this->execute($returnType));
+        if (!$this->sort) {
+            return '';
+        }
+        if (is_array($this->sort)) {
+            $sql = [];
+            foreach ($this->sort as $column => $command) {
+                $sql[] = "`$column` $command";
+            }
+            return implode(',', $sql);
+        } else {
+            return $this->sort;
+        }
     }
 
     /**
      * Author:Robert
      *
-     * @param null $returnType
-     * @return array
-     * @throws \Exception
+     * @return string
      */
-    public function fetchAll($returnType = null): array
+    private function makeColumnSQL()
     {
-        return $this->execute($returnType);
+        if (!$this->columns) {
+            return '*';
+        }
+        $columns = [];
+        foreach ($this->columns as $field => $alias) {
+            if (is_int($field)) {
+                $columns[] = "`{$alias}`";
+            } else {
+                $columns[] = "`{$field}` AS `{$alias}`";
+            }
+
+        }
+        return implode(',', $columns);
     }
 
 }
