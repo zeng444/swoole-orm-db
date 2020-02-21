@@ -426,7 +426,12 @@ class Finder
         if (is_array($this->sort)) {
             $sql = [];
             foreach ($this->sort as $column => $command) {
-                $sql[] = "`$column` $command";
+               if(is_int($column)){
+                   $sql[] = "$command";
+               }else{
+                   $sql[] = "`$column` $command";
+               }
+
             }
             return implode(',', $sql);
         } else {

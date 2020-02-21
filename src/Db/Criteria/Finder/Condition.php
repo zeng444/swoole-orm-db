@@ -62,6 +62,30 @@ class Condition
      */
     private $bindFiled = [];
 
+
+    const EQUAL_DIRECTIVE = 'eq';
+    const NOT_EQUAL_DIRECTIVE = 'neq';
+    const GREATER_THAN_DIRECTIVE = 'gt';
+    const LESS_THAN_DIRECTIVE = 'lt';
+    const GREATER_THAN_EQUAL_DIRECTIVE = 'gte';
+    const LESS_THAN_EQUAL_DIRECTIVE = 'lte';
+    const IN_DIRECTIVE = 'in';
+    const NOT_IN_DIRECTIVE = 'notIn';
+
+    /**
+     *
+     */
+    const DIRECTIVE_MAP = [
+        self::EQUAL_DIRECTIVE => '=',
+        self::NOT_EQUAL_DIRECTIVE => '<>',
+        self::GREATER_THAN_DIRECTIVE => '>',
+        self::LESS_THAN_DIRECTIVE => '<',
+        self::GREATER_THAN_EQUAL_DIRECTIVE => '>=',
+        self::LESS_THAN_EQUAL_DIRECTIVE => '<=',
+        self::IN_DIRECTIVE => 'IN',
+        self::NOT_IN_DIRECTIVE => 'NOT IN',
+    ];
+
     /**
      * Condition constructor.
      * @param array $conditions
@@ -110,29 +134,46 @@ class Condition
     {
         $whereSql = [];
         if (in_array($field, $this->_dateColumns) && is_array($value)) {
-            $startBind = $this->makeBindField($field);
-            $endBind = $this->makeBindField($field);
-            $whereSql[] = "`$field`>=:{$startBind}";
-            $whereSql[] = "`$field`<=:{$endBind}";
-            $this->_bind[$startBind] = $value[0] ?? '';
-            $this->_bind[$endBind] = $value[1] ?? '';
+            if($value[0]){
+                $startBind = $this->makeBindField($field);
+                $whereSql[] = "`$field`>=:{$startBind}";
+                $this->_bind[$startBind] = $value[0] ?? '';
+            }
+            if($value[1]){
+                $endBind = $this->makeBindField($field);
+                $whereSql[] = "`$field`<=:{$endBind}";
+                $this->_bind[$endBind] = $value[1] ?? '';
+            }
         } elseif (in_array($field, $this->_fullTextColumns)) {
             $bindField = $this->makeBindField($field);
             $whereSql[] = "`$field` LIKE :$bindField";
             $this->_bind[$bindField] = "%$value%";
         } elseif (is_array($value)) {
-            if (is_int(key($value))) {
-                $value['in'] = $value;
+            $sign = key($value);
+            if (is_int($sign)) {
+                $sign = self::IN_DIRECTIVE;
+                $value[$sign] = $value;
             }
-            $sign = isset($value['in']) ? 'IN' : 'NOT IN';
-            $values = $sign === 'IN' ? $value['in'] : $value['notIn'];
-            $holder = [];
-            foreach ($values as $index => $it) {
+            if (in_array($sign, [self::IN_DIRECTIVE, self::NOT_IN_DIRECTIVE])) {
+                $holder = [];
+                foreach ($value[$sign] as $index => $it) {
+                    $bindField = $this->makeBindField($field);
+                    $holder[] = ':'.$bindField;
+                    $this->_bind[$bindField] = $it;
+                }
+                $whereSql[] = "`$field` ".self::DIRECTIVE_MAP[$sign]." (".implode(',', $holder).")";
+            } elseif (in_array($sign, [
+                self::EQUAL_DIRECTIVE,
+                self::NOT_EQUAL_DIRECTIVE,
+                self::GREATER_THAN_DIRECTIVE,
+                self::LESS_THAN_DIRECTIVE,
+                self::GREATER_THAN_EQUAL_DIRECTIVE,
+                self::LESS_THAN_EQUAL_DIRECTIVE,
+            ])) {
                 $bindField = $this->makeBindField($field);
-                $holder[] = ':'.$bindField;
-                $this->_bind[$bindField] = $it;
+                $whereSql[] = "`$field` ".self::DIRECTIVE_MAP[$sign]." :$bindField";
+                $this->_bind[$bindField] = $value[$sign];
             }
-            $whereSql[] = "`$field` $sign (".implode(',', $holder).")";
         } else {
             $bindField = $this->makeBindField($field);
             $whereSql[] = "`$field` = :$bindField";
@@ -140,6 +181,7 @@ class Condition
         }
         return $whereSql ? implode(' AND ', $whereSql) : '';
     }
+
 
     /**
      * Author:Robert
