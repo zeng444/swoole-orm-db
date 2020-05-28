@@ -11,7 +11,7 @@
   "require": {
     "ext-pdo": "*",
     "php": ">=7.1.0",
-    "ext-swoole": "4.3.*"
+    "ext-swoole": "4.4.*"
   },
   "autoload": {
     "psr-4": {
