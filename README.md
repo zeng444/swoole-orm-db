@@ -1,5 +1,7 @@
 # Phalcon DB Layer 协程版
 
+> 支持swoole4.3.* 及 swole4.4.*
+ 
 ## 特色
 
 - 基于Swoole Mysql驱动重写的phalcon db layer，方法和phalcon手册一致
