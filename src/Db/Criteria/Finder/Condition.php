@@ -133,7 +133,9 @@ class Condition
     public function where($field, $value)
     {
         $whereSql = [];
-        if (in_array($field, $this->_dateColumns) && is_array($value)) {
+        if (is_int($field)) {
+            $whereSql[] = $value;
+        } elseif (in_array($field, $this->_dateColumns) && is_array($value)) {
             if($value[0]){
                 $startBind = $this->makeBindField($field);
                 $whereSql[] = "`$field`>=:{$startBind}";
